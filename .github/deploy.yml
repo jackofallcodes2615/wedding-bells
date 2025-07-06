@@ -31,7 +31,7 @@ jobs:
       - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './public' # THIS IS THE KEY LINE: Point to your 'public' folder!
+          path: './public/index.html' # THIS IS THE KEY LINE: Point to your 'public' folder!
 
       - name: Deploy to GitHub Pages
         id: deployment
