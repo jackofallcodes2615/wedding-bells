@@ -13,7 +13,9 @@ import {
   Heart,
   Receipt,
   Wallet,
-  BarChart3
+  BarChart3,
+  Plus,
+  X
 } from 'lucide-react';
 
 const Dashboard = ({ user }) => {
@@ -24,6 +26,8 @@ const Dashboard = ({ user }) => {
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [editingIncome, setEditingIncome] = useState(null);
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -41,14 +45,27 @@ const Dashboard = ({ user }) => {
     amount: ''
   });
 
-  const categories = [
-    'Venue', 'Catering', 'Photography', 'Flowers', 'Music', 
-    'Decorations', 'Attire', 'Transportation', 'Invitations', 'Other'
-  ];
+  // Indian wedding-specific categories
+  const [categories, setCategories] = useState([
+    'Venue', 'Catering', 'Photography', 'Videography', 'Gold Jewelry', 
+    'Wedding Attire', 'Mehndi', 'Decorations', 'Music/DJ', 'Pandit/Priest',
+    'Invitations', 'Transportation', 'Flowers', 'Makeup Artist', 'Other'
+  ]);
 
   const incomeSources = [
-    'Savings', 'Gift from Parents', 'Loan', 'Investment Returns', 'Salary', 'Other'
+    'Savings', 'Gift from Parents', 'Loan', 'Fixed Deposits', 'Salary', 
+    'Mutual Funds', 'Gold Sale', 'Property Sale', 'Other'
   ];
+
+  // Format currency in Indian Rupees
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -73,14 +90,44 @@ const Dashboard = ({ user }) => {
       setIncome(incomeData);
     });
 
+    // Listen to custom categories
+    const categoriesRef = collection(db, 'users', user.uid, 'categories');
+    const unsubCategories = onSnapshot(categoriesRef, (snapshot) => {
+      const customCategories = snapshot.docs.map(doc => doc.data().name);
+      if (customCategories.length > 0) {
+        const defaultCategories = [
+          'Venue', 'Catering', 'Photography', 'Videography', 'Gold Jewelry', 
+          'Wedding Attire', 'Mehndi', 'Decorations', 'Music/DJ', 'Pandit/Priest',
+          'Invitations', 'Transportation', 'Flowers', 'Makeup Artist', 'Other'
+        ];
+        setCategories([...defaultCategories, ...customCategories]);
+      }
+    });
+
     return () => {
       unsubExpenses();
       unsubIncome();
+      unsubCategories();
     };
   }, [user]);
 
   const handleSignOut = () => {
     signOut(auth);
+  };
+
+  const addCustomCategory = async () => {
+    if (!customCategory.trim()) return;
+    
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'categories'), {
+        name: customCategory.trim(),
+        createdAt: new Date()
+      });
+      setCustomCategory('');
+      setShowCustomCategory(false);
+    } catch (error) {
+      console.error('Error adding category:', error);
+    }
   };
 
   const addExpense = async (e) => {
@@ -203,7 +250,7 @@ const Dashboard = ({ user }) => {
             <TrendingUp className="w-8 h-8 text-green-400 mr-3" />
             <div>
               <p className="text-white/80 text-sm">Total Income</p>
-              <p className="text-2xl font-bold text-white">${totalIncome.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(totalIncome)}</p>
             </div>
           </div>
         </div>
@@ -213,7 +260,7 @@ const Dashboard = ({ user }) => {
             <DollarSign className="w-8 h-8 text-blue-400 mr-3" />
             <div>
               <p className="text-white/80 text-sm">Expected Costs</p>
-              <p className="text-2xl font-bold text-white">${totalExpected.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(totalExpected)}</p>
             </div>
           </div>
         </div>
@@ -223,7 +270,7 @@ const Dashboard = ({ user }) => {
             <TrendingDown className="w-8 h-8 text-orange-400 mr-3" />
             <div>
               <p className="text-white/80 text-sm">Actual Spent</p>
-              <p className="text-2xl font-bold text-white">${totalActual.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(totalActual)}</p>
             </div>
           </div>
         </div>
@@ -234,7 +281,7 @@ const Dashboard = ({ user }) => {
             <div>
               <p className="text-white/80 text-sm">{remaining >= 0 ? 'Remaining' : 'Over Budget'}</p>
               <p className={`text-2xl font-bold ${remaining >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ${Math.abs(remaining).toFixed(2)}
+                {formatCurrency(Math.abs(remaining))}
               </p>
             </div>
           </div>
@@ -286,15 +333,24 @@ const Dashboard = ({ user }) => {
               </h3>
               <form onSubmit={addExpense} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <select
-                    value={expenseForm.category}
-                    onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
-                    className="input-field"
-                  >
-                    {categories.map(cat => (
-                      <option key={cat} value={cat} className="text-black">{cat}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={expenseForm.category}
+                      onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
+                      className="input-field pr-10"
+                    >
+                      {categories.map(cat => (
+                        <option key={cat} value={cat} className="text-black">{cat}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomCategory(!showCustomCategory)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                   
                   <input
                     type="text"
@@ -307,23 +363,49 @@ const Dashboard = ({ user }) => {
                   
                   <input
                     type="number"
-                    placeholder="Expected Amount"
+                    placeholder="Expected Amount (₹)"
                     value={expenseForm.expectedAmount}
                     onChange={(e) => setExpenseForm({...expenseForm, expectedAmount: e.target.value})}
                     className="input-field"
-                    step="0.01"
+                    step="1"
                     required
                   />
                   
                   <input
                     type="number"
-                    placeholder="Actual Amount (optional)"
+                    placeholder="Actual Amount (₹) - Optional"
                     value={expenseForm.actualAmount}
                     onChange={(e) => setExpenseForm({...expenseForm, actualAmount: e.target.value})}
                     className="input-field"
-                    step="0.01"
+                    step="1"
                   />
                 </div>
+
+                {showCustomCategory && (
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Add new category (e.g., Astrologer, Band Baja)"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      className="input-field flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomCategory}
+                      className="btn-primary"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomCategory(false)}
+                      className="btn-secondary"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
                 
                 <select
                   value={expenseForm.status}
@@ -371,9 +453,9 @@ const Dashboard = ({ user }) => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <p className="text-white font-semibold">${expense.expectedAmount?.toFixed(2)}</p>
+                    <p className="text-white font-semibold">{formatCurrency(expense.expectedAmount)}</p>
                     {expense.actualAmount > 0 && (
-                      <p className="text-white/70 text-sm">Actual: ${expense.actualAmount?.toFixed(2)}</p>
+                      <p className="text-white/70 text-sm">Actual: {formatCurrency(expense.actualAmount)}</p>
                     )}
                   </div>
                   <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -451,11 +533,11 @@ const Dashboard = ({ user }) => {
                   
                   <input
                     type="number"
-                    placeholder="Amount"
+                    placeholder="Amount (₹)"
                     value={incomeForm.amount}
                     onChange={(e) => setIncomeForm({...incomeForm, amount: e.target.value})}
                     className="input-field"
-                    step="0.01"
+                    step="1"
                     required
                   />
                 </div>
@@ -495,7 +577,7 @@ const Dashboard = ({ user }) => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <p className="text-green-400 font-semibold text-lg">${incomeItem.amount?.toFixed(2)}</p>
+                  <p className="text-green-400 font-semibold text-lg">{formatCurrency(incomeItem.amount)}</p>
                   <button
                     onClick={() => editIncomeItem(incomeItem)}
                     className="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10"

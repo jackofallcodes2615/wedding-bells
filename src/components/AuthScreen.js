@@ -3,35 +3,18 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider,
-  RecaptchaVerifier,
-  signInWithPhoneNumber
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { auth } from '../App';
-import { Heart, Mail, Lock, Phone } from 'lucide-react';
+import { Heart, Mail, Lock } from 'lucide-react';
 
 const AuthScreen = () => {
-  const [authMode, setAuthMode] = useState('google'); // 'email', 'google', 'phone'
+  const [authMode, setAuthMode] = useState('google'); // 'email', 'google'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isLogin, setIsLogin] = useState(true);
-
-  // Initialize recaptcha for phone auth
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response) => {
-          console.log('Recaptcha resolved');
-        }
-      });
-    }
-  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -41,39 +24,8 @@ const AuthScreen = () => {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (error) {
-      setError(error.message);
-    }
-    
-    setLoading(false);
-  };
-
-  const handlePhoneAuth = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      setupRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-      setConfirmationResult(confirmationResult);
-      setError('');
-    } catch (error) {
-      setError(error.message);
-    }
-    
-    setLoading(false);
-  };
-
-  const handleVerifyCode = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      await confirmationResult.confirm(verificationCode);
-    } catch (error) {
-      setError('Invalid verification code');
+      console.error('Google sign-in error:', error);
+      setError('Failed to sign in with Google. Please try again.');
     }
     
     setLoading(false);
@@ -91,6 +43,7 @@ const AuthScreen = () => {
         await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch (error) {
+      console.error('Email auth error:', error);
       setError(error.message);
     }
     
@@ -111,7 +64,10 @@ const AuthScreen = () => {
         {/* Auth Method Selection */}
         <div className="flex space-x-2 mb-6">
           <button
-            onClick={() => setAuthMode('google')}
+            onClick={() => {
+              setAuthMode('google');
+              setError('');
+            }}
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               authMode === 'google' ? 'bg-white/30 text-white' : 'text-white/70 hover:text-white bg-white/10'
             }`}
@@ -119,15 +75,10 @@ const AuthScreen = () => {
             Gmail
           </button>
           <button
-            onClick={() => setAuthMode('phone')}
-            className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
-              authMode === 'phone' ? 'bg-white/30 text-white' : 'text-white/70 hover:text-white bg-white/10'
-            }`}
-          >
-            Phone
-          </button>
-          <button
-            onClick={() => setAuthMode('email')}
+            onClick={() => {
+              setAuthMode('email');
+              setError('');
+            }}
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               authMode === 'email' ? 'bg-white/30 text-white' : 'text-white/70 hover:text-white bg-white/10'
             }`}
@@ -173,73 +124,6 @@ const AuthScreen = () => {
           </div>
         )}
 
-        {/* Phone Authentication */}
-        {authMode === 'phone' && (
-          <div className="space-y-4">
-            {!confirmationResult ? (
-              <form onSubmit={handlePhoneAuth}>
-                <div className="relative mb-4">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
-                  <input
-                    type="tel"
-                    placeholder="+1234567890"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="input-field pl-12"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Sending Code...
-                    </div>
-                  ) : (
-                    'Send Verification Code'
-                  )}
-                </button>
-                <div id="recaptcha-container"></div>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyCode}>
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    placeholder="Enter 6-digit code"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    className="input-field text-center text-2xl tracking-widest"
-                    maxLength="6"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Verifying...' : 'Verify Code'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmationResult(null);
-                    setVerificationCode('');
-                  }}
-                  className="btn-secondary w-full mt-2"
-                >
-                  Change Phone Number
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
         {/* Email Authentication */}
         {authMode === 'email' && (
           <form onSubmit={handleEmailAuth} className="space-y-6">
@@ -259,11 +143,12 @@ const AuthScreen = () => {
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <input
                 type="password"
-                placeholder="Password"
+                placeholder="Password (min 6 characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="input-field pl-12"
                 required
+                minLength="6"
               />
             </div>
 
