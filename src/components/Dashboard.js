@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../App';
@@ -15,7 +15,9 @@ import {
   Wallet,
   BarChart3,
   Plus,
-  X
+  X,
+  Settings,
+  Tag
 } from 'lucide-react';
 
 const Dashboard = ({ user }) => {
@@ -28,6 +30,9 @@ const Dashboard = ({ user }) => {
   const [editingIncome, setEditingIncome] = useState(null);
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState('');
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [userCategories, setUserCategories] = useState([]);
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -45,12 +50,14 @@ const Dashboard = ({ user }) => {
     amount: ''
   });
 
-  // Indian wedding-specific categories
-  const [categories, setCategories] = useState([
+  // Default Indian wedding-specific categories
+  const defaultCategories = useMemo(() => [
     'Venue', 'Catering', 'Photography', 'Videography', 'Gold Jewelry', 
     'Wedding Attire', 'Mehndi', 'Decorations', 'Music/DJ', 'Pandit/Priest',
     'Invitations', 'Transportation', 'Flowers', 'Makeup Artist', 'Other'
-  ]);
+  ], []);
+  
+  const [categories, setCategories] = useState(defaultCategories);
 
   const incomeSources = [
     'Savings', 'Gift from Parents', 'Loan', 'Fixed Deposits', 'Salary', 
@@ -93,15 +100,13 @@ const Dashboard = ({ user }) => {
     // Listen to custom categories
     const categoriesRef = collection(db, 'users', user.uid, 'categories');
     const unsubCategories = onSnapshot(categoriesRef, (snapshot) => {
-      const customCategories = snapshot.docs.map(doc => doc.data().name);
-      if (customCategories.length > 0) {
-        const defaultCategories = [
-          'Venue', 'Catering', 'Photography', 'Videography', 'Gold Jewelry', 
-          'Wedding Attire', 'Mehndi', 'Decorations', 'Music/DJ', 'Pandit/Priest',
-          'Invitations', 'Transportation', 'Flowers', 'Makeup Artist', 'Other'
-        ];
-        setCategories([...defaultCategories, ...customCategories]);
-      }
+      const customCategories = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        isCustom: true
+      }));
+      setUserCategories(customCategories);
+      setCategories([...defaultCategories, ...customCategories.map(cat => cat.name)]);
     });
 
     return () => {
@@ -109,7 +114,7 @@ const Dashboard = ({ user }) => {
       unsubIncome();
       unsubCategories();
     };
-  }, [user]);
+  }, [user, defaultCategories]);
 
   const handleSignOut = () => {
     signOut(auth);
@@ -127,6 +132,30 @@ const Dashboard = ({ user }) => {
       setShowCustomCategory(false);
     } catch (error) {
       console.error('Error adding category:', error);
+    }
+  };
+
+  const addCategoryFromManagement = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'categories'), {
+        name: newCategoryName.trim(),
+        createdAt: new Date()
+      });
+      setNewCategoryName('');
+      setShowCategoryForm(false);
+    } catch (error) {
+      console.error('Error adding category:', error);
+    }
+  };
+
+  const deleteCategory = async (categoryId) => {
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'categories', categoryId));
+    } catch (error) {
+      console.error('Error deleting category:', error);
     }
   };
 
@@ -308,6 +337,15 @@ const Dashboard = ({ user }) => {
           >
             <Wallet className="w-5 h-5 inline mr-2" />
             Income
+          </button>
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+              activeTab === 'categories' ? 'bg-white/30 text-white' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            <Settings className="w-5 h-5 inline mr-2" />
+            Manage Categories
           </button>
         </div>
       </div>
@@ -600,6 +638,118 @@ const Dashboard = ({ user }) => {
                 <p className="text-white/70">No income sources yet. Add your first income source!</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Manage Categories Tab */}
+      {activeTab === 'categories' && (
+        <div className="glass p-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <h2 className="text-xl font-bold text-white">Manage Categories</h2>
+            <button
+              onClick={() => setShowCategoryForm(true)}
+              className="btn-primary"
+            >
+              <PlusCircle className="w-5 h-5 mr-2" />
+              Add Category
+            </button>
+          </div>
+
+          {showCategoryForm && (
+            <div className="bg-white/10 rounded-xl p-6 mb-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Add New Category</h3>
+              <form onSubmit={addCategoryFromManagement} className="space-y-4">
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Category name (e.g., Astrologer, Band Baja, Reception Hall)"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="input-field flex-1"
+                    required
+                  />
+                  <button type="submit" className="btn-primary">
+                    Add Category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCategoryForm(false);
+                      setNewCategoryName('');
+                    }}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Default Categories */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+              <Tag className="w-5 h-5 mr-2" />
+              Default Categories
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {defaultCategories.map(category => (
+                <div key={category} className="bg-white/10 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="bg-blue-500/20 rounded-lg p-2 mr-3">
+                      <Tag className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <span className="text-white font-medium">{category}</span>
+                  </div>
+                  <div className="bg-gray-500/20 px-3 py-1 rounded-full">
+                    <span className="text-gray-300 text-xs font-medium">Default</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Categories */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+              <Settings className="w-5 h-5 mr-2" />
+              Your Custom Categories
+            </h3>
+            <div className="space-y-4">
+              {userCategories.map(category => (
+                <div key={category.id} className="bg-white/10 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="bg-green-500/20 rounded-lg p-2 mr-3">
+                      <Tag className="w-5 h-5 text-green-400" />
+                    </div>
+                    <span className="text-white font-medium">{category.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="bg-green-500/20 px-3 py-1 rounded-full">
+                      <span className="text-green-300 text-xs font-medium">Custom</span>
+                    </div>
+                    <button
+                      onClick={() => deleteCategory(category.id)}
+                      className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10"
+                      title="Delete category"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              {userCategories.length === 0 && (
+                <div className="text-center py-12">
+                  <Settings className="w-16 h-16 text-white/50 mx-auto mb-4" />
+                  <p className="text-white/70">No custom categories yet. Add your first custom category!</p>
+                  <p className="text-white/50 text-sm mt-2">
+                    Custom categories are perfect for unique expenses like astrologer fees, band baja, or specific venue decorations.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
